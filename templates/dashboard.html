@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CyberThreat Intelligence Dashboard</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome for icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background-color: #f4f7fc;
+        }
+
+        .container {
+            margin-top: 30px;
+        }
+
+        .card-header {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .card-body {
+            background-color: #fff;
+        }
+
+        .stat-card {
+            text-align: center;
+            padding: 20px;
+            border-radius: 8px;
+            background-color: #007bff;
+            color: white;
+        }
+
+        .stat-card h3 {
+            margin-bottom: 10px;
+        }
+
+        .stat-card .fa {
+            font-size: 30px;
+            margin-bottom: 10px;
+        }
+
+        .row {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h1 class="text-center my-5">CyberThreat Intelligence Dashboard</h1>
+
+        <div class="row">
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <i class="fas fa-cogs"></i>
+                    <h3>{{ total_assets }}</h3>
+                    <p>Total Assets</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <i class="fas fa-domain"></i>
+                    <h3>{{ unique_domains }}</h3>
+                    <p>Unique Domains</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <i class="fas fa-th-large"></i>
+                    <h3>{{ categories_count }}</h3>
+                    <p>Categories Count</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <i class="fas fa-map-marker-alt"></i>
+                    <h3>{{ regions_count }}</h3>
+                    <p>Regions Count</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Category Distribution Chart -->
+        <div class="card">
+            <div class="card-header">
+                <h5>Category Distribution</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="categoryChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Regional Distribution Chart -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>Regional Distribution</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="regionalChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Recent Data -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>Recent Data</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Domain</th>
+                            <th>Category</th>
+                            <th>Region</th>
+                            <th>Fetch Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in recent_data %}
+                        <tr>
+                            <td>{{ record['domain'] }}</td>
+                            <td>{{ record['category'] }}</td>
+                            <td>{{ record['region'] or 'N/A' }}</td>
+                            <td>{{ record['fetch_date'] }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Category Distribution Chart
+        var ctx1 = document.getElementById('categoryChart').getContext('2d');
+        var categoryChart = new Chart(ctx1, {
+            type: 'bar',
+            data: {
+                labels: {{ category_stats | tojson | safe }},
+                datasets: [{
+                    label: 'Category Count',
+                    data: {{ category_stats | tojson | safe }},
+                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        // Regional Distribution Chart
+        var ctx2 = document.getElementById('regionalChart').getContext('2d');
+        var regionalChart = new Chart(ctx2, {
+            type: 'pie',
+            data: {
+                labels: {{ regional_data | tojson | safe }},
+                datasets: [{
+                    label: 'Regions Distribution',
+                    data: {{ regional_data | tojson | safe }},
+                    backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#FF5733', '#8E44AD'],
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true
+            }
+        });
+    </script>
+
+    <!-- Bootstrap JS, jQuery, and Popper.js -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+</body>
+
+</html>

@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lapsus - Giriş</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #000000 0%, #0d1421 25%, #1a2332 50%, #0a1628 75%, #000511 100%);
+            color: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Animated background elements */
+        .bg-animation {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 0;
+        }
+
+        .bg-animation::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(30, 144, 255, 0.1) 0%, transparent 70%);
+            animation: rotate 30s linear infinite;
+        }
+
+        .bg-animation::after {
+            content: '';
+            position: absolute;
+            top: -25%;
+            right: -25%;
+            width: 150%;
+            height: 150%;
+            background: radial-gradient(circle, rgba(135, 206, 235, 0.05) 0%, transparent 60%);
+            animation: rotate-reverse 25s linear infinite;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes rotate-reverse {
+            from { transform: rotate(360deg); }
+            to { transform: rotate(0deg); }
+        }
+
+        /* Login container */
+        .login-container {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            max-width: 400px;
+            padding: 2rem;
+        }
+
+        .login-card {
+            background: linear-gradient(145deg, rgba(10, 22, 40, 0.9), rgba(25, 25, 112, 0.7));
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(30, 144, 255, 0.3);
+            border-radius: 1.5rem;
+            padding: 3rem 2rem;
+            box-shadow: 0 20px 50px rgba(30, 144, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .login-card:hover {
+            border-color: rgba(30, 144, 255, 0.5);
+            box-shadow: 0 25px 60px rgba(30, 144, 255, 0.3);
+        }
+
+        /* Header */
+        .login-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .logo i {
+            color: #1e90ff;
+            width: 40px;
+            height: 40px;
+            filter: drop-shadow(0 0 10px rgba(30, 144, 255, 0.7));
+        }
+
+        .logo h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #1e90ff, #87ceeb);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(30, 144, 255, 0.5);
+        }
+
+        .login-subtitle {
+            color: #6495ed;
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+
+        /* Form */
+        .login-form {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #f1f5f9;
+            font-weight: 500;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            background: linear-gradient(145deg, rgba(15, 25, 35, 0.8), rgba(20, 30, 45, 0.6));
+            border: 1px solid rgba(30, 144, 255, 0.3);
+            border-radius: 0.5rem;
+            color: #ffffff;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #1e90ff;
+            box-shadow: 0 0 0 3px rgba(30, 144, 255, 0.1), 0 0 20px rgba(30, 144, 255, 0.3);
+            background: linear-gradient(145deg, rgba(15, 25, 35, 0.9), rgba(20, 30, 45, 0.7));
+        }
+
+        .form-input::placeholder {
+            color: #6495ed;
+        }
+
+        /* Remember me checkbox */
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .checkbox-input {
+            width: 18px;
+            height: 18px;
+            accent-color: #1e90ff;
+        }
+
+        .checkbox-label {
+            color: #6495ed;
+            font-size: 0.875rem;
+            cursor: pointer;
+        }
+
+        /* Submit button */
+        .submit-btn {
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(135deg, #1e90ff, #4682b4);
+            border: none;
+            border-radius: 0.5rem;
+            color: #ffffff;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 15px rgba(30, 144, 255, 0.3);
+        }
+
+        .submit-btn:hover {
+            background: linear-gradient(135deg, #4682b4, #1e90ff);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(30, 144, 255, 0.4);
+        }
+
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+
+        /* Flash messages */
+        .flash-messages {
+            margin-bottom: 1.5rem;
+        }
+
+        .flash-message {
+            padding: 0.875rem 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .flash-error {
+            background: linear-gradient(145deg, rgba(220, 38, 38, 0.2), rgba(153, 27, 27, 0.15));
+            border: 1px solid rgba(220, 38, 38, 0.3);
+            color: #fca5a5;
+        }
+
+        .flash-success {
+            background: linear-gradient(145deg, rgba(34, 197, 94, 0.2), rgba(22, 163, 74, 0.15));
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            color: #86efac;
+        }
+
+        .flash-info {
+            background: linear-gradient(145deg, rgba(59, 130, 246, 0.2), rgba(37, 99, 235, 0.15));
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            color: #93c5fd;
+        }
+
+        /* Footer */
+        .login-footer {
+            text-align: center;
+            color: #6495ed;
+            font-size: 0.75rem;
+            margin-top: 1.5rem;
+        }
+
+        /* Loading state */
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .loading .submit-btn::after {
+            content: '';
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s ease-in-out infinite;
+            margin-left: 0.5rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Mobile responsive */
+        @media (max-width: 480px) {
+            .login-container {
+                padding: 1rem;
+            }
+
+            .login-card {
+                padding: 2rem 1.5rem;
+            }
+
+            .logo h1 {
+                font-size: 1.75rem;
+            }
+        }
+
+        /* Password visibility toggle */
+        .password-field {
+            position: relative;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #6495ed;
+            cursor: pointer;
+            transition: color 0.2s ease;
+        }
+
+        .password-toggle:hover {
+            color: #1e90ff;
+        }
+
+        /* Floating animation */
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .login-card {
+            animation: float 6s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-animation"></div>
+    
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="logo">
+                    <i data-lucide="shield-check"></i>
+                    <h1>Lapsus</h1>
+                </div>
+                <p class="login-subtitle">Hesap Yönetim Sistemi</p>
+            </div>
+
+            <!-- Flash Messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-messages">
+                        {% for category, message in messages %}
+                            <div class="flash-message flash-{{ category }}">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            <form class="login-form" method="POST" id="loginForm">
+                <div class="form-group">
+                    <label for="username" class="form-label">Kullanıcı Adı</label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        name="username" 
+                        class="form-input"
+                        placeholder="Kullanıcı adınızı girin"
+                        required
+                        autocomplete="username"
+                        value="{{ request.form.username if request.form.username }}"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="password" class="form-label">Şifre</label>
+                    <div class="password-field">
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            class="form-input"
+                            placeholder="Şifrenizi girin"
+                            required
+                            autocomplete="current-password"
+                        >
+                        <button type="button" class="password-toggle" onclick="togglePassword()">
+                            <i data-lucide="eye" id="eyeIcon"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="checkbox-group">
+                    <input 
+                        type="checkbox" 
+                        id="remember" 
+                        name="remember" 
+                        class="checkbox-input"
+                        {{ 'checked' if request.form.remember }}
+                    >
+                    <label for="remember" class="checkbox-label">Beni hatırla (24 saat)</label>
+                </div>
+
+                <button type="submit" class="submit-btn" id="submitBtn">
+                    Giriş Yap
+                </button>
+            </form>
+
+            <div class="login-footer">
+                <p>&copy; 2025 Lapsus. Tüm hakları saklıdır.</p>
+                <p>Güvenli bağlantı ile korunmaktadır.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Password visibility toggle
+        function togglePassword() {
+            const passwordInput = document.getElementById('password');
+            const eyeIcon = document.getElementById('eyeIcon');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                eyeIcon.setAttribute('data-lucide', 'eye-off');
+            } else {
+                passwordInput.type = 'password';
+                eyeIcon.setAttribute('data-lucide', 'eye');
+            }
+            
+            // Re-initialize icons
+            lucide.createIcons();
+        }
+
+        // Form submission with loading state
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            const form = this;
+            const submitBtn = document.getElementById('submitBtn');
+            
+            // Add loading state
+            form.classList.add('loading');
+            submitBtn.textContent = 'Giriş yapılıyor...';
+            
+            // Remove loading state after a delay (in case of form validation errors)
+            setTimeout(() => {
+                form.classList.remove('loading');
+                submitBtn.textContent = 'Giriş Yap';
+            }, 5000);
+        });
+
+        // Auto-focus on username field
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('username').focus();
+        });
+
+        // Enter key handling
+        document.getElementById('username').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                document.getElementById('password').focus();
+            }
+        });
+
+        document.getElementById('password').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                document.getElementById('loginForm').submit();
+            }
+        });
+
+        // Security: Clear form on page unload
+        window.addEventListener('beforeunload', function() {
+            document.getElementById('password').value = '';
+        });
+
+        // Prevent multiple submissions
+        let isSubmitting = false;
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            if (isSubmitting) {
+                e.preventDefault();
+                return false;
+            }
+            isSubmitting = true;
+        });
+
+        // Simple rate limiting - client side
+        let loginAttempts = parseInt(localStorage.getItem('loginAttempts') || '0');
+        let lastAttempt = parseInt(localStorage.getItem('lastLoginAttempt') || '0');
+        
+        // Reset attempts after 15 minutes
+        if (Date.now() - lastAttempt > 15 * 60 * 1000) {
+            loginAttempts = 0;
+            localStorage.removeItem('loginAttempts');
+            localStorage.removeItem('lastLoginAttempt');
+        }
+
+        if (loginAttempts >= 5) {
+            const timeLeft = Math.ceil((15 * 60 * 1000 - (Date.now() - lastAttempt)) / 60000);
+            alert(`Çok fazla başarısız deneme. ${timeLeft} dakika sonra tekrar deneyin.`);
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('submitBtn').textContent = `${timeLeft} dakika bekleyin`;
+        }
+
+        // Track failed attempts
+        if (window.location.search.includes('error')) {
+            loginAttempts++;
+            localStorage.setItem('loginAttempts', loginAttempts.toString());
+            localStorage.setItem('lastLoginAttempt', Date.now().toString());
+        }
+    </script>
+</body>
+</html>

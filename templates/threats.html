@@ -1,0 +1,444 @@
+<nav class="sidebar-nav">
+            <div class="nav-item">
+                <a href="#" class="nav-link active" onclick="switchPage('dashboard')">
+                    <i data-lucide="layout-dashboard"></i>
+                    Kontrol Paneli
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link" onclick="switchPage('analytics')">
+                    <i data-lucide="bar-chart-3"></i>
+                    Analitik
+                </a>
+            </div>
+            <div class=<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lapsus - Kontrol Paneli</title>
+    <!-- Chart.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #000000 0%, #0d1421 25%, #1a2332 50%, #0a1628 75%, #000511 100%);
+            color: #ffffff;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 260px;
+            height: 100vh;
+            background: linear-gradient(145deg, rgba(5, 15, 25, 0.95), rgba(10, 22, 40, 0.9));
+            backdrop-filter: blur(15px);
+            border-right: 1px solid rgba(30, 144, 255, 0.3);
+            z-index: 1000;
+            transition: transform 0.3s ease;
+            box-shadow: 0 0 30px rgba(30, 144, 255, 0.15);
+        }
+
+        .sidebar-header {
+            padding: 2rem 1.5rem;
+            border-bottom: 1px solid rgba(30, 144, 255, 0.3);
+        }
+
+        .sidebar-header h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1e90ff;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-shadow: 0 0 20px rgba(30, 144, 255, 0.6);
+        }
+
+        .sidebar-header p {
+            font-size: 0.875rem;
+            color: #87ceeb;
+            margin-top: 0.25rem;
+            font-weight: 500;
+        }
+
+        .sidebar-nav {
+            padding: 1rem 0;
+        }
+
+        .nav-item {
+            margin: 0.25rem 1rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.875rem 1rem;
+            color: #6495ed;
+            text-decoration: none;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .nav-link:hover {
+            background: linear-gradient(135deg, rgba(30, 144, 255, 0.2), rgba(0, 100, 255, 0.15));
+            color: #1e90ff;
+            transform: translateX(4px);
+            box-shadow: 0 4px 15px rgba(30, 144, 255, 0.3);
+        }
+
+        .nav-link.active {
+            background: linear-gradient(135deg, rgba(30, 144, 255, 0.25), rgba(0, 100, 255, 0.2));
+            color: #1e90ff;
+            border-left: 3px solid #1e90ff;
+            box-shadow: 0 4px 20px rgba(30, 144, 255, 0.4);
+        }
+
+        .nav-link i {
+            width: 20px;
+            height: 20px;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 260px;
+            min-height: 100vh;
+            transition: margin-left 0.3s ease;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            background: linear-gradient(135deg, rgba(5, 15, 25, 0.9), rgba(10, 22, 40, 0.8));
+            backdrop-filter: blur(15px);
+            border-bottom: 1px solid rgba(30, 144, 255, 0.3);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 4px 20px rgba(30, 144, 255, 0.15);
+        }
+
+        .top-bar-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 0.375rem;
+            transition: color 0.2s ease;
+        }
+
+        .menu-toggle:hover {
+            color: #1e90ff;
+        }
+
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #6495ed;
+            font-size: 0.875rem;
+        }
+
+        .breadcrumb .active {
+            color: #87ceeb;
+            font-weight: 500;
+            text-shadow: 0 0 10px rgba(135, 206, 235, 0.5);
+        }
+
+        .top-bar-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-left: auto;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: linear-gradient(135deg, rgba(30, 144, 255, 0.2), rgba(0, 191, 255, 0.15));
+            color: #00bfff;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            border: 1px solid rgba(30, 144, 255, 0.3);
+            box-shadow: 0 4px 15px rgba(30, 144, 255, 0.2);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #00bfff;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+            box-shadow: 0 0 10px rgba(0, 191, 255, 0.7);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Content Area */
+        .content {
+            padding: 2rem;
+        }
+
+        .page-header {
+            margin-bottom: 2rem;
+        }
+
+        .page-title {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #1e90ff, #87ceeb, #4682b4);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 0 30px rgba(30, 144, 255, 0.3);
+        }
+
+        .page-subtitle {
+            color: #6495ed;
+            font-size: 1rem;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
+            .menu-toggle {
+                display: block;
+            }
+
+            .content {
+                padding: 1rem;
+            }
+
+            .page-title {
+                font-size: 1.5rem;
+            }
+
+            .top-bar {
+                padding: 1rem;
+            }
+        }
+
+        /* Loading Animation */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.6s ease-out forwards;
+        }
+
+        /* Overlay for mobile */
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+
+        .overlay.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <!-- Overlay for mobile -->
+    <div class="overlay" onclick="toggleSidebar()"></div>
+
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h1>
+                <i data-lucide="shield-check"></i>
+                Lapsus
+            </h1>
+            <p>Hesap Yönetim Sistemi</p>
+        </div>
+        
+        <nav class="sidebar-nav">
+            <div class="nav-item">
+                <a href="#" class="nav-link active" onclick="switchPage('dashboard')">
+                    <i data-lucide="layout-dashboard"></i>
+                    Kontrol Paneli
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link" onclick="switchPage('analytics')">
+                    <i data-lucide="bar-chart-3"></i>
+                    Analitik
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link" onclick="switchPage('accounts')">
+                    <i data-lucide="users"></i>
+                    Hesaplar
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link" onclick="switchPage('reports')">
+                    <i data-lucide="file-text"></i>
+                    Raporlar
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="#" class="nav-link" onclick="switchPage('settings')">
+                    <i data-lucide="settings"></i>
+                    Ayarlar
+                </a>
+            </div>
+        </nav>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <div class="top-bar-left">
+                <button class="menu-toggle" onclick="toggleSidebar()">
+                    <i data-lucide="menu"></i>
+                </button>
+                <div class="breadcrumb">
+                    <span>Ana Sayfa</span>
+                    <i data-lucide="chevron-right"></i>
+                    <span class="active">Kontrol Paneli</span>
+                </div>
+            </div>
+            <div class="top-bar-right">
+                <div class="user-info" style="display: flex; align-items: center; gap: 1rem; margin-right: 1rem;">
+                    <span style="color: #6495ed; font-size: 0.875rem;">
+                        <i data-lucide="user" style="width: 16px; height: 16px; margin-right: 0.25rem;"></i>
+                        {{ user_name or 'Kullanıcı' }}
+                    </span>
+                    <a href="/logout" style="color: #fca5a5; text-decoration: none; font-size: 0.875rem; transition: color 0.2s;">
+                        <i data-lucide="log-out" style="width: 16px; height: 16px; margin-right: 0.25rem;"></i>
+                        Çıkış
+                    </a>
+                </div>
+                <div class="status-indicator" id="statusIndicator">
+                    <div class="status-dot"></div>
+                    <span id="statusText">Sistem Hazır</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <div class="page-header fade-in">
+                <h1 class="page-title">Dashboard</h1>
+                <p class="page-subtitle">İçerik buraya eklenecek</p>
+            </div>
+
+            <!-- BURAYA İSTEDİĞİNİZ İÇERİĞİ EKLEYİN -->
+            <div class="main-area">
+                <p>Bu alan boş - istediğiniz dashboard içeriğini buraya ekleyebilirsiniz.</p>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Sidebar toggle
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.querySelector('.overlay');
+            
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('active');
+        }
+
+        // Page switching
+        function switchPage(page) {
+            // Remove active class from all nav links
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            
+            // Add active class to clicked nav link
+            event.target.classList.add('active');
+            
+            // Update breadcrumb
+            const breadcrumb = document.querySelector('.breadcrumb .active');
+            const pageNames = {
+                'dashboard': 'Kontrol Paneli',
+                'analytics': 'Analitik',
+                'accounts': 'Hesaplar',
+                'reports': 'Raporlar',
+                'settings': 'Ayarlar'
+            };
+            breadcrumb.textContent = pageNames[page] || 'Kontrol Paneli';
+            
+            // Close sidebar on mobile
+            if (window.innerWidth <= 768) {
+                toggleSidebar();
+            }
+        }
+
+        // Page load
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Lapsus Dashboard yüklendi');
+            
+            // Buraya başlangıç kodlarınızı ekleyebilirsiniz
+            
+        });
+    </script>
+</body>
+</html>
