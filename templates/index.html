@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lapsus - Kontrol Paneli</title>
+    <title>Lapsus - Dijital Varlık Yönetim Platformu</title>
     <!-- Chart.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
     <!-- Google Fonts -->
@@ -472,26 +472,26 @@
                 <i data-lucide="shield-check"></i>
                 Lapsus
             </h1>
-            <p>Hesap Yönetim Sistemi</p>
+            <p>Dijital Varlık Yönetim Platformu</p>
         </div>
         
         <nav class="sidebar-nav">
-            <div class="nav-item">
-                <a href="#" class="nav-link active" onclick="switchPage('dashboard')">
-                    <i data-lucide="layout-dashboard"></i>
-                    Kontrol Paneli
-                </a>
-            </div>
-            <div class="nav-item">
-                <a href="#" class="nav-link" onclick="switchPage('analytics')">
-                    <i data-lucide="bar-chart-3"></i>
-                    Analitik
-                </a>
-            </div>
+          <div class="nav-item">
+        <a href="#" id="dashboardLink" class="nav-link" onclick="switchPage('dashboard')">
+            <i data-lucide="layout-dashboard"></i>
+            Kontrol Paneli
+        </a>
+    </div>
+    <div class="nav-item">
+        <a href="/search" id="searchLink" class="nav-link" onclick="switchPage('search')">
+            <i data-lucide="search"></i>
+            Arama
+        </a>
+    </div>
             <div class="nav-item">
                 <a href="#" class="nav-link" onclick="switchPage('accounts')">
                     <i data-lucide="users"></i>
-                    Hesaplar
+                    Dijital Varlıklar
                 </a>
             </div>
             <div class="nav-item">
@@ -520,7 +520,7 @@
                 <div class="breadcrumb">
                     <span>Ana Sayfa</span>
                     <i data-lucide="chevron-right"></i>
-                    <span class="active">Kontrol Paneli</span>
+                    <span class="active">Dijital Varlık Analizi</span>
                 </div>
             </div>
             <div class="top-bar-right">
@@ -536,7 +536,7 @@
                 </div>
                 <div class="status-indicator" id="statusIndicator">
                     <div class="status-dot"></div>
-                    <span id="statusText">Yükleniyor...</span>
+                    <span id="statusText">Sistem Başlatılıyor...</span>
                 </div>
             </div>
         </div>
@@ -544,8 +544,8 @@
         <!-- Content -->
         <div class="content">
             <div class="page-header fade-in">
-                <h1 class="page-title">Hesap İstatistikleri</h1>
-                <p class="page-subtitle">Gerçek zamanlı hesap kategorisi analizi ve raporları</p>
+                <h1 class="page-title">Dijital Varlık Analizi</h1>
+                <p class="page-subtitle">Kurumsal hesap kategorilerinin detaylı analizi ve istatistikleri</p>
                 <div class="last-updated" id="lastUpdated"></div>
             </div>
 
@@ -555,11 +555,11 @@
             {% endif %}
             
             <div id="errorMessage" class="error-message" style="display: none;"></div>
-            <div id="loadingMessage" class="loading-message">📊 Veriler yükleniyor...</div>
+            <div id="loadingMessage" class="loading-message">📊 Dijital varlık verileri analiz ediliyor...</div>
             <div id="noDataMessage" class="no-data-message" style="display: none;">
-                <h3>Veri Bulunamadı</h3>
-                <p>fetched_accounts tablosunda henüz veri bulunmuyor.</p>
-                <p>Veri ekleme scriptini çalıştırarak verileri ekleyebilirsiniz.</p>
+                <h3>Veri Tespit Edilemedi</h3>
+                <p>Sistem veritabanında henüz dijital varlık verisi bulunmamaktadır.</p>
+                <p>Veri toplama prosedürünü başlatarak analiz sürecini başlatabilirsiniz.</p>
             </div>
 
             <!-- Stats Grid - Dinamik olarak oluşturulacak -->
@@ -569,8 +569,8 @@
             <div class="charts-section" id="chartsSection" style="display: none;">
                 <div class="chart-card fade-in">
                     <div class="chart-header">
-                        <h3 class="chart-title">Dağılım Özeti</h3>
-                        <p class="chart-subtitle">Kategori bazında hesap dağılımı</p>
+                        <h3 class="chart-title">Kategori Dağılımı</h3>
+                        <p class="chart-subtitle">Dijital varlıkların kategori bazında oransal dağılımı</p>
                     </div>
                     <div class="summary-chart">
                         <canvas id="summaryChart"></canvas>
@@ -579,8 +579,8 @@
 
                 <div class="chart-card fade-in">
                     <div class="chart-header">
-                        <h3 class="chart-title">Detaylı Analiz</h3>
-                        <p class="chart-subtitle">Kategori karşılaştırması</p>
+                        <h3 class="chart-title">Karşılaştırmalı Analiz</h3>
+                        <p class="chart-subtitle">Kategoriler arası sayısal karşılaştırma</p>
                     </div>
                     <div class="detailed-chart">
                         <canvas id="detailedChart"></canvas>
@@ -620,7 +620,7 @@
         // API'den gerçek veri çek
         async function fetchRealData() {
             try {
-                showMessage('loading', '📊 Veriler yükleniyor...');
+                showMessage('loading', '📊 Dijital varlık verileri analiz ediliyor...');
                 
                 const response = await fetch('/api/stats');
                 const apiData = await response.json();
@@ -632,14 +632,14 @@
                     
                     // UI güncelle
                     updateDashboard(apiData);
-                    updateStatus('Sistem Aktif', true);
+                    updateStatus('Sistem Operasyonel', true);
                     hideMessages();
                     
-                    console.log('✅ Gerçek veri API\'den yüklendi:', apiData);
+                    console.log('✅ Dijital varlık verileri başarıyla yüklendi:', apiData);
                 } else {
                     // Veri yok
                     showMessage('nodata');
-                    updateStatus('Veri Yok', false);
+                    updateStatus('Veri Mevcut Değil', false);
                     hideStatsAndCharts();
                     console.warn('⚠️ API\'den veri alınamadı:', apiData.error || 'Bilinmeyen hata');
                 }
@@ -705,7 +705,7 @@
         function updateDashboard(apiData) {
             // Son güncelleme bilgisi
             document.getElementById('lastUpdated').textContent = 
-                `Son güncelleme: ${apiData.last_updated} | Toplam: ${apiData.total_accounts} hesap | Benzersiz domain: ${apiData.unique_domains}`;
+                `Son güncelleme: ${apiData.last_updated} | Toplam: ${apiData.total_accounts} dijital varlık | Benzersiz domain: ${apiData.unique_domains}`;
             
             // Stat kartlarını oluştur
             createStatCards();
@@ -733,7 +733,7 @@
                         </div>
                     </div>
                     <div class="stat-value">${category.count.toLocaleString()}</div>
-                    <div class="stat-percentage">%${category.percentage} toplam hesap</div>
+                    <div class="stat-percentage">%${category.percentage} toplam varlık</div>
                     <div class="stat-chart">
                         <canvas id="miniChart${index}"></canvas>
                     </div>
@@ -856,7 +856,7 @@
                             callbacks: {
                                 label: function(context) {
                                     const category = data.categories[context.dataIndex];
-                                    return category.label + ': ' + category.count.toLocaleString() + ' hesap (%' + category.percentage + ')';
+                                    return category.label + ': ' + category.count.toLocaleString() + ' varlık (%' + category.percentage + ')';
                                 }
                             }
                         }
@@ -877,7 +877,7 @@
                 data: {
                     labels: data.categories.map(cat => cat.label),
                     datasets: [{
-                        label: 'Hesap Sayısı',
+                        label: 'Dijital Varlık Sayısı',
                         data: data.categories.map(cat => cat.count),
                         backgroundColor: data.categories.map(cat => cat.color + '80'),
                         borderColor: data.categories.map(cat => cat.color),
@@ -927,7 +927,7 @@
                             cornerRadius: 8,
                             callbacks: {
                                 label: function(context) {
-                                    return 'Hesap Sayısı: ' + context.parsed.y.toLocaleString();
+                                    return 'Dijital Varlık Sayısı: ' + context.parsed.y.toLocaleString();
                                 }
                             }
                         }
@@ -942,7 +942,7 @@
 
         // Auto-refresh function
         function autoRefresh() {
-            console.log('🔄 Veri güncelleme kontrolü...');
+            console.log('🔄 Dijital varlık verisi güncelleme kontrolü...');
             fetchRealData();
         }
 
@@ -953,8 +953,9 @@
                 // Veri var, dashboard'ı göster
                 hideMessages();
                 showStatsAndCharts();
-                updateStatus('Sistem Aktif', true);
+                updateStatus('Sistem Operasyonel', true);
                 updateDashboardWithFlaskData();
+                console.log('✅ Flask\'tan dijital varlık verileri yüklendi');
             {% else %}
                 // Veri yok, API'den dene
                 fetchRealData();
@@ -976,7 +977,7 @@
             if (data.categories && data.categories.length > 0) {
                 // Son güncelleme bilgisi
                 document.getElementById('lastUpdated').textContent = 
-                    `Son güncelleme: {{ stats.last_updated }} | Toplam: {{ stats.total_accounts }} hesap | Benzersiz domain: {{ stats.unique_domains }}`;
+                    `Son güncelleme: {{ stats.last_updated }} | Toplam: {{ stats.total_accounts }} dijital varlık | Benzersiz domain: {{ stats.unique_domains }}`;
                 
                 // Stat kartlarını oluştur
                 createStatCards();
@@ -1008,13 +1009,13 @@
             // Update breadcrumb
             const breadcrumb = document.querySelector('.breadcrumb .active');
             const pageNames = {
-                'dashboard': 'Kontrol Paneli',
-                'analytics': 'Analitik',
-                'accounts': 'Hesaplar',
-                'reports': 'Raporlar',
-                'settings': 'Ayarlar'
+                'dashboard': 'Dijital Varlık Analizi',
+                'analytics': 'İleri Analitik',
+                'accounts': 'Dijital Varlık Envanteri',
+                'reports': 'Kurumsal Raporlar',
+                'settings': 'Sistem Ayarları'
             };
-            breadcrumb.textContent = pageNames[page] || 'Kontrol Paneli';
+            breadcrumb.textContent = pageNames[page] || 'Dijital Varlık Analizi';
             
             // Close sidebar on mobile
             if (window.innerWidth <= 768) {
@@ -1029,23 +1030,118 @@
 
         // Error handling için window error event
         window.addEventListener('error', function(e) {
-            console.error('JavaScript hatası:', e.error);
-            showMessage('error', '❌ Beklenmeyen bir hata oluştu. Sayfa yenileniyor...');
+            console.error('Sistem hatası:', e.error);
+            showMessage('error', '❌ Beklenmeyen bir sistem hatası oluştu. Sayfa yenileniyor...');
             setTimeout(() => location.reload(), 3000);
         });
 
         // Network status kontrolü
         window.addEventListener('online', function() {
-            console.log('🌐 İnternet bağlantısı geri geldi');
-            updateStatus('Sistem Aktif', true);
+            console.log('🌐 Ağ bağlantısı yeniden kuruldu');
+            updateStatus('Sistem Operasyonel', true);
             fetchRealData();
         });
 
         window.addEventListener('offline', function() {
-            console.log('❌ İnternet bağlantısı kesildi');
-            updateStatus('Bağlantı Yok', false);
-            showMessage('error', '❌ İnternet bağlantısı yok. Lütfen bağlantınızı kontrol edin.');
+            console.log('❌ Ağ bağlantısı kesildi');
+            updateStatus('Bağlantı Kesintisi', false);
+            showMessage('error', '❌ Ağ bağlantısı mevcut değil. Lütfen bağlantınızı kontrol ediniz.');
         });
+
+        // Performance monitoring
+        window.addEventListener('load', function() {
+            const loadTime = performance.now();
+            console.log(`📊 Sayfa yükleme süresi: ${Math.round(loadTime)}ms`);
+            
+            // 5 saniyeden fazla yükleme süresi uyarısı
+            if (loadTime > 5000) {
+                console.warn('⚠️ Sayfa yükleme süresi normalden uzun');
+            }
+        });
+
+        // Data validation
+        function validateData(apiData) {
+            if (!apiData || typeof apiData !== 'object') {
+                throw new Error('Geçersiz veri formatı');
+            }
+            
+            if (!Array.isArray(apiData.categories)) {
+                throw new Error('Kategori verisi eksik veya geçersiz');
+            }
+            
+            apiData.categories.forEach((category, index) => {
+                if (!category.label || !category.count || !category.percentage) {
+                    throw new Error(`Kategori ${index + 1} verisi eksik`);
+                }
+            });
+            
+            return true;
+        }
+
+        // Enhanced error logging
+        function logError(error, context = '') {
+            const errorData = {
+                message: error.message,
+                stack: error.stack,
+                context: context,
+                timestamp: new Date().toISOString(),
+                userAgent: navigator.userAgent,
+                url: window.location.href
+            };
+            
+            console.error('🚨 Detaylı hata raporu:', errorData);
+            
+            // Production'da hata raporlama servisine gönderilebilir
+            // sendErrorReport(errorData);
+        }
     </script>
 </body>
-</html>
+</html><!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lapsus - Kontrol Paneli</title>
+    <!-- Chart.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #000000 0%, #0d1421 25%, #1a2332 50%, #0a1628 75%, #000511 100%);
+            color: #ffffff;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 260px;
+            height: 100vh;
+            background: linear-gradient(145deg, rgba(5, 15, 25, 0.95), rgba(10, 22, 40, 0.9));
+            backdrop-filter: blur(15px);
+            border-right: 1px solid rgba(30, 144, 255, 0.3);
+            z-index: 1000;
+            transition: transform 0.3s ease;
+            box-shadow: 0 0 30px rgba(30, 144, 255, 0.15);
+        }
+
+        .sidebar-header {
+            padding: 2rem 1.5rem;
+            border-bottom: 1px solid rgba(30, 144, 255, 0.3);
+        }
+
+        .sidebar-header

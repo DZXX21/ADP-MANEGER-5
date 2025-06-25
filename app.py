@@ -6,6 +6,9 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta
 from functools import wraps
+import requests
+import os
+
 
 app = Flask(__name__)
 
@@ -26,6 +29,13 @@ DB_CONFIG = {
     'port': 3306
 }
 
+# API Configuration - GÜVENLİ BACKEND'TE SAKLANIR
+API_CONFIG = {
+    'base_url': os.getenv('API_BASE_URL', 'http://192.168.70.71:5000'),
+    'api_key': os.getenv('API_KEY', 'demo_key_123'),
+    'timeout': 30,
+    'max_retries': 3
+}
 # Admin kullanıcı bilgileri - PRODUCTION'da veritabanından alın!
 ADMIN_USERS = {
     'admin': {
@@ -42,11 +52,11 @@ ADMIN_USERS = {
 
 # Kategori isimlerini Türkçeye çevirme - GERÇEK KATEGORİLER
 CATEGORY_TRANSLATIONS = {
-    'government': 'Hükümet',
-    'banks': 'Bankalar', 
-    'popular_turkish': 'Popüler Türk',
-    'turkish_extensions': 'Türk Uzantıları',
-    'universities': 'Üniversiteler'
+    'government': 'Kamu Kurumları',
+    'banks': 'Finansal Kuruluşlar', 
+    'popular_turkish': 'Öne Çıkan Türk Siteler',
+    'turkish_extensions': 'Türkiye Uzantılı Platformlar',
+    'universities': 'Yükseköğretim Kurumları'
 }
 
 # Kategori renkleri
@@ -95,6 +105,51 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+# API Request Helper - GÜVENLİ API ÇAĞRISI
+def make_api_request(endpoint, method='GET', params=None, data=None, retries=0):
+    """Güvenli API request helper"""
+    try:
+        url = f"{API_CONFIG['base_url']}{endpoint}"
+        headers = {
+            'X-API-Key': API_CONFIG['api_key'],  # Doğru anahtar: api_key
+            'Content-Type': 'application/json',
+            'User-Agent': 'Lapsus-Dashboard/1.0'
+        }
+        
+        if method == 'GET':
+            response = requests.get(url, headers=headers, params=params, timeout=API_CONFIG['timeout'])
+        elif method == 'POST':
+            response = requests.post(url, headers=headers, json=data, timeout=API_CONFIG['timeout'])
+        else:
+            raise ValueError(f"Desteklenmeyen HTTP metodu: {method}")
+        
+        response.raise_for_status()
+        return response.json()
+        
+    except requests.exceptions.Timeout:
+        logging.error(f"API timeout: {endpoint}")
+        if retries < API_CONFIG['max_retries']:
+            return make_api_request(endpoint, method, params, data, retries + 1)
+        raise Exception("API zaman aşımı - sunucu yanıt vermiyor")
+        
+    except requests.exceptions.ConnectionError:
+        logging.error(f"API bağlantı hatası: {endpoint}")
+        raise Exception("API sunucusuna bağlanılamıyor")
+        
+    except requests.exceptions.HTTPError as e:
+        logging.error(f"API HTTP hatası: {e.response.status_code} - {endpoint}")
+        if e.response.status_code == 401:
+            raise Exception("API yetkilendirme hatası")
+        elif e.response.status_code == 429:
+            raise Exception("API rate limit aşıldı")
+        else:
+            raise Exception(f"API sunucu hatası: {e.response.status_code}")
+            
+    except Exception as e:
+        logging.error(f"API genel hatası: {str(e)}")
+        if retries < API_CONFIG['max_retries']:
+            return make_api_request(endpoint, method, params, data, retries + 1)
+        raise
 # Kullanıcı doğrulama
 def verify_user(username, password):
     user = ADMIN_USERS.get(username)
@@ -155,6 +210,147 @@ def logout():
     flash('Başarıyla çıkış yaptınız.', 'info')
     logging.info(f"Çıkış yapıldı: {username}")
     return redirect(url_for('login'))
+
+# SEARCH PAGE ROUTE
+@app.route('/search')
+@login_required
+def search_page():
+    """Arama sayfası - güvenli API key olmadan"""
+    return render_template('search.html', 
+                         user_name=session.get('user_name'),
+                         user_role=session.get('user_role'))
+
+# SECURE API PROXY ENDPOINTS - API KEY'İ FRONTEND'E MARUZ BIRAKMAZ
+
+@app.route('/api/proxy/search')
+@login_required
+def proxy_search():
+    """Güvenli arama proxy - API key frontend'de görünmez"""
+    try:
+        # Frontend'den gelen parametreleri al
+        query = request.args.get('q', '').strip()
+        page = request.args.get('page', 1, type=int)
+        limit = request.args.get('limit', 20, type=int)
+        domain = request.args.get('domain', '')
+        region = request.args.get('region', '')
+        source = request.args.get('source', '')
+        
+        # Doğrulama
+        if not query or len(query) < 2:
+            return jsonify({
+                'success': False,
+                'error': 'Arama sorgusu en az 2 karakter olmalıdır'
+            }), 400
+        
+        if limit > 100:
+            limit = 100
+            
+        # API parametrelerini hazırla
+        api_params = {
+            'q': query,
+            'page': page,
+            'limit': limit
+        }
+        
+        # Filtreleri ekle
+        if domain:
+            api_params['domain'] = domain
+        if region:
+            api_params['region'] = region
+        if source:
+            api_params['source'] = source
+        
+        # Güvenli API çağrısı yap
+        api_response = make_api_request('/api/search', params=api_params)
+        
+        # Response'u frontend'e gönder
+        return jsonify(api_response)
+        
+    except Exception as e:
+        logging.error(f"Search proxy error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/proxy/accounts')
+@login_required
+def proxy_accounts():
+    """Güvenli hesap listesi proxy"""
+    try:
+        # Parametreleri al
+        page = request.args.get('page', 1, type=int)
+        limit = request.args.get('limit', 10, type=int)
+        domain = request.args.get('domain', '')
+        region = request.args.get('region', '')
+        source = request.args.get('source', '')
+        
+        api_params = {
+            'page': page,
+            'limit': min(limit, 100)  # Maksimum 100
+        }
+        
+        if domain:
+            api_params['domain'] = domain
+        if region:
+            api_params['region'] = region
+        if source:
+            api_params['source'] = source
+        
+        api_response = make_api_request('/api/accounts', params=api_params)
+        return jsonify(api_response)
+        
+    except Exception as e:
+        logging.error(f"Accounts proxy error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/proxy/account/<int:account_id>')
+@login_required
+def proxy_single_account(account_id):
+    """Tekil hesap bilgisi proxy"""
+    try:
+        api_response = make_api_request(f'/api/accounts/{account_id}')
+        return jsonify(api_response)
+        
+    except Exception as e:
+        logging.error(f"Single account proxy error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/proxy/statistics')
+@login_required
+def proxy_statistics():
+    """İstatistik proxy"""
+    try:
+        api_response = make_api_request('/api/stats')
+        return jsonify(api_response)
+        
+    except Exception as e:
+        logging.error(f"Statistics proxy error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/proxy/health')
+@login_required
+def proxy_health():
+    """Sistem sağlık kontrolü proxy"""
+    try:
+        api_response = make_api_request('/api/health')
+        return jsonify(api_response)
+        
+    except Exception as e:
+        logging.error(f"Health proxy error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 # DASHBOARD ROUTES (Login Gerekli)
 @app.route('/')
@@ -270,6 +466,7 @@ def dashboard():
 @login_required  
 def index():
     return redirect(url_for('dashboard'))
+
 
 # Veritabanı bağlantı test endpoint'i
 @app.route('/test-db')
@@ -459,6 +656,22 @@ def user_info():
         'user_name': session.get('user_name'),
         'user_role': session.get('user_role'),
         'login_time': session.get('login_time')
+    })
+
+# API Configuration endpoint - Frontend için
+@app.route('/api/config')
+@login_required
+def api_config():
+    """Frontend için güvenli API konfigürasyonu"""
+    return jsonify({
+        'success': True,
+        'endpoints': {
+            'search': '/api/proxy/search',
+            'accounts': '/api/proxy/accounts',
+            'statistics': '/api/proxy/statistics',
+            'health': '/api/proxy/health'
+        },
+        'user': session.get('user_name', 'Kullanıcı')
     })
 
 # Admin panel (opsiyonel)
