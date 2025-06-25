@@ -8,34 +8,44 @@ from datetime import datetime, timedelta
 from functools import wraps
 import requests
 import os
-
+import json
 
 app = Flask(__name__)
 
-# Session için secret key - PRODUCTION'da değiştirin!
-app.secret_key = secrets.token_hex(32)
-app.permanent_session_lifetime = timedelta(hours=24)  # 24 saat session
+# Session için secret key - PRODUCTION'da çevre değişkeninden alın!
+app.secret_key = os.getenv('SECRET_KEY', secrets.token_hex(32))
+app.permanent_session_lifetime = timedelta(hours=24)
 
 # Loglama ayarları
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('lapsus.log'),
+        logging.StreamHandler()
+    ]
+)
 
-# Veritabanı bağlantı bilgileri
+# Veritabanı bağlantı bilgileri - PRODUCTION'da çevre değişkenlerinden alın!
 DB_CONFIG = {
-    'host': '192.168.70.70',
-    'database': 'lapsusacc',
-    'user': 'root',
-    'password': 'daaqwWdas21as',
+    'host': os.getenv('DB_HOST', '192.168.70.70'),
+    'database': os.getenv('DB_NAME', 'lapsusacc'),
+    'user': os.getenv('DB_USER', 'root'),
+    'password': os.getenv('DB_PASSWORD', 'daaqwWdas21as'),
     'charset': 'utf8mb4',
-    'port': 3306
+    'port': int(os.getenv('DB_PORT', 3306)),
+    'autocommit': True,
+    'raise_on_warnings': True
 }
 
 # API Configuration - GÜVENLİ BACKEND'TE SAKLANIR
 API_CONFIG = {
     'base_url': os.getenv('API_BASE_URL', 'http://192.168.70.71:5000'),
     'api_key': os.getenv('API_KEY', 'demo_key_123'),
-    'timeout': 30,
-    'max_retries': 3
+    'timeout': int(os.getenv('API_TIMEOUT', 30)),
+    'max_retries': int(os.getenv('API_MAX_RETRIES', 3))
 }
+
 # Admin kullanıcı bilgileri - PRODUCTION'da veritabanından alın!
 ADMIN_USERS = {
     'admin': {
@@ -50,13 +60,16 @@ ADMIN_USERS = {
     }
 }
 
-# Kategori isimlerini Türkçeye çevirme - GERÇEK KATEGORİLER
+# Kategori isimlerini Türkçeye çevirme
 CATEGORY_TRANSLATIONS = {
     'government': 'Kamu Kurumları',
     'banks': 'Finansal Kuruluşlar', 
     'popular_turkish': 'Öne Çıkan Türk Siteler',
     'turkish_extensions': 'Türkiye Uzantılı Platformlar',
-    'universities': 'Yükseköğretim Kurumları'
+    'universities': 'Yükseköğretim Kurumları',
+    'social_media': 'Sosyal Medya',
+    'email_providers': 'E-posta Sağlayıcıları',
+    'tech_companies': 'Teknoloji Şirketleri'
 }
 
 # Kategori renkleri
@@ -65,7 +78,10 @@ CATEGORY_COLORS = {
     'banks': '#87ceeb',
     'popular_turkish': '#00bfff',
     'turkish_extensions': '#4682b4',
-    'universities': '#5f9ea0'
+    'universities': '#5f9ea0',
+    'social_media': '#ff6b6b',
+    'email_providers': '#4ecdc4',
+    'tech_companies': '#45b7d1'
 }
 
 # Kategori ikonları
@@ -74,13 +90,17 @@ CATEGORY_ICONS = {
     'banks': 'landmark',
     'popular_turkish': 'star',
     'turkish_extensions': 'globe',
-    'universities': 'graduation-cap'
+    'universities': 'graduation-cap',
+    'social_media': 'users',
+    'email_providers': 'mail',
+    'tech_companies': 'cpu'
 }
 
 # Kategori sıralama öncelikleri
-CATEGORY_ORDER = ['government', 'banks', 'popular_turkish', 'turkish_extensions', 'universities']
+CATEGORY_ORDER = ['government', 'banks', 'popular_turkish', 'turkish_extensions', 'universities', 'social_media', 'email_providers', 'tech_companies']
 
-# Login gerekli decorator
+
+# Decorators
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -90,7 +110,6 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# Admin gerekli decorator
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -105,13 +124,44 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# API Request Helper - GÜVENLİ API ÇAĞRISI
+
+# Database Functions
+def get_db_connection():
+    """Güvenli veritabanı bağlantısı"""
+    try:
+        connection = mysql.connector.connect(**DB_CONFIG)
+        if connection.is_connected():
+            logging.info("Veritabanına başarıyla bağlanıldı.")
+            return connection
+    except Error as e:
+        logging.error(f"Veritabanı bağlantı hatası: {e}")
+        return None
+
+def test_db_connection():
+    """Veritabanı bağlantısını test et"""
+    connection = get_db_connection()
+    if connection:
+        try:
+            cursor = connection.cursor()
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+            cursor.close()
+            connection.close()
+            return True
+        except Error as e:
+            logging.error(f"Veritabanı test hatası: {e}")
+            if connection:
+                connection.close()
+    return False
+
+
+# API Request Helper
 def make_api_request(endpoint, method='GET', params=None, data=None, retries=0):
     """Güvenli API request helper"""
     try:
         url = f"{API_CONFIG['base_url']}{endpoint}"
         headers = {
-            'X-API-Key': API_CONFIG['api_key'],  # Doğru anahtar: api_key
+            'X-API-Key': API_CONFIG['api_key'],
             'Content-Type': 'application/json',
             'User-Agent': 'Lapsus-Dashboard/1.0'
         }
@@ -150,8 +200,11 @@ def make_api_request(endpoint, method='GET', params=None, data=None, retries=0):
         if retries < API_CONFIG['max_retries']:
             return make_api_request(endpoint, method, params, data, retries + 1)
         raise
-# Kullanıcı doğrulama
+
+
+# Authentication Functions
 def verify_user(username, password):
+    """Kullanıcı doğrulama"""
     user = ADMIN_USERS.get(username)
     if user:
         password_hash = hashlib.sha256(password.encode()).hexdigest()
@@ -159,20 +212,13 @@ def verify_user(username, password):
             return user
     return None
 
-# Veritabanı bağlantısı
-def get_db_connection():
-    try:
-        connection = mysql.connector.connect(**DB_CONFIG)
-        if connection.is_connected():
-            logging.info("Veritabanına başarıyla bağlanıldı.")
-            return connection
-    except Error as e:
-        logging.error(f"Veritabanı bağlantı hatası: {e}")
-        return None
 
-# LOGIN ROUTES
+# Routes
+
+# Login/Logout Routes
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    """Giriş sayfası"""
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
@@ -193,7 +239,6 @@ def login():
             flash(f'Hoş geldiniz, {user["name"]}!', 'success')
             logging.info(f"Başarılı giriş: {username} - {request.remote_addr}")
             
-            # Redirect to next page or dashboard
             next_page = request.args.get('next')
             return redirect(next_page) if next_page else redirect(url_for('dashboard'))
         else:
@@ -205,46 +250,157 @@ def login():
 @app.route('/logout')
 @login_required
 def logout():
+    """Çıkış"""
     username = session.get('user_id', 'Bilinmeyen')
     session.clear()
     flash('Başarıyla çıkış yaptınız.', 'info')
     logging.info(f"Çıkış yapıldı: {username}")
     return redirect(url_for('login'))
 
-# SEARCH PAGE ROUTE
+
+# Main Routes
+@app.route('/')
+@login_required
+def dashboard():
+    """Ana dashboard sayfası"""
+    connection = None
+    chart_data = []
+    summary_data = {'labels': [], 'counts': [], 'percentages': [], 'colors': []}
+    error = ""
+    stats = {
+        'total_accounts': 0,
+        'unique_domains': 0,
+        'categories': [],
+        'last_updated': 'Bilinmiyor'
+    }
+
+    try:
+        connection = get_db_connection()
+        if connection:
+            cursor = connection.cursor(dictionary=True)
+            
+            # Kategori bazında veri çek
+            cursor.execute("""
+                SELECT category, COUNT(*) as count 
+                FROM fetched_accounts 
+                GROUP BY category 
+                ORDER BY count DESC
+            """)
+            categories = cursor.fetchall()
+            
+            if categories:
+                total_count = sum(category['count'] for category in categories)
+                
+                # Kategori sıralaması ile veri hazırla
+                chart_data = []
+                category_dict = {cat['category']: cat['count'] for cat in categories}
+                
+                # Önce tanımlı sıralamadaki kategorileri ekle
+                for cat_key in CATEGORY_ORDER:
+                    if cat_key in category_dict:
+                        count = category_dict[cat_key]
+                        percentage = round((count / total_count) * 100, 1)
+                        
+                        chart_data.append({
+                            'category': cat_key,
+                            'label': CATEGORY_TRANSLATIONS.get(cat_key, cat_key.title()),
+                            'count': count,
+                            'percentage': percentage,
+                            'color': CATEGORY_COLORS.get(cat_key, '#6B7280'),
+                            'icon': CATEGORY_ICONS.get(cat_key, 'folder')
+                        })
+                
+                # Sonra tanımlanmamış kategorileri ekle
+                for category in categories:
+                    cat_key = category['category']
+                    if cat_key not in CATEGORY_ORDER:
+                        percentage = round((category['count'] / total_count) * 100, 1)
+                        chart_data.append({
+                            'category': cat_key,
+                            'label': CATEGORY_TRANSLATIONS.get(cat_key, cat_key.title()),
+                            'count': category['count'],
+                            'percentage': percentage,
+                            'color': CATEGORY_COLORS.get(cat_key, '#6B7280'),
+                            'icon': CATEGORY_ICONS.get(cat_key, 'folder')
+                        })
+                
+                summary_data = {
+                    'labels': [item['label'] for item in chart_data],
+                    'counts': [item['count'] for item in chart_data],
+                    'percentages': [item['percentage'] for item in chart_data],
+                    'colors': [item['color'] for item in chart_data]
+                }
+                
+                # Ek istatistikler
+                cursor.execute("SELECT COUNT(*) as total FROM fetched_accounts")
+                stats['total_accounts'] = cursor.fetchone()['total']
+                
+                cursor.execute("SELECT COUNT(DISTINCT domain) as unique_domains FROM fetched_accounts")
+                stats['unique_domains'] = cursor.fetchone()['unique_domains']
+                
+                # En son güncelleme tarihi
+                cursor.execute("SELECT MAX(fetch_date) as last_update FROM fetched_accounts")
+                last_update_result = cursor.fetchone()
+                stats['last_updated'] = str(last_update_result['last_update']) if last_update_result['last_update'] else 'Bilinmiyor'
+                
+                stats['categories'] = chart_data
+                
+                logging.info(f"Dashboard verileri yüklendi: {len(categories)} kategori, toplam {total_count} kayıt")
+                
+            else:
+                error = "fetched_accounts tablosunda veri bulunamadı!"
+                logging.warning("fetched_accounts tablosunda veri bulunamadı")
+                
+            cursor.close()
+            connection.close()
+            
+        else:
+            error = "Veritabanına bağlanılamadı!"
+            logging.error("Veritabanına bağlanılamadı")
+            
+    except Error as e:
+        error = f"Veri çekme hatası: {str(e)}"
+        logging.error(f"Dashboard veri çekme hatası: {e}")
+        if connection:
+            connection.close()
+
+    return render_template('index.html', 
+                         chart_data=chart_data, 
+                         summary_data=summary_data, 
+                         stats=stats,
+                         error=error,
+                         user_name=session.get('user_name'),
+                         user_role=session.get('user_role'))
+
 @app.route('/search')
 @login_required
 def search_page():
-    """Arama sayfası - güvenli API key olmadan"""
+    """Arama sayfası"""
     return render_template('search.html', 
                          user_name=session.get('user_name'),
                          user_role=session.get('user_role'))
 
-# SECURE API PROXY ENDPOINTS - API KEY'İ FRONTEND'E MARUZ BIRAKMAZ
 
+# API Proxy Endpoints - Frontend API key'lerini gizler
 @app.route('/api/proxy/search')
 @login_required
 def proxy_search():
-    """Güvenli arama proxy - API key frontend'de görünmez"""
+    """Güvenli arama proxy"""
     try:
-        # Frontend'den gelen parametreleri al
+        # Frontend'den gelen parametreleri al ve doğrula
         query = request.args.get('q', '').strip()
         page = request.args.get('page', 1, type=int)
-        limit = request.args.get('limit', 20, type=int)
+        limit = min(request.args.get('limit', 20, type=int), 100)  # Max 100
         domain = request.args.get('domain', '')
         region = request.args.get('region', '')
         source = request.args.get('source', '')
         
-        # Doğrulama
         if not query or len(query) < 2:
             return jsonify({
                 'success': False,
                 'error': 'Arama sorgusu en az 2 karakter olmalıdır'
             }), 400
         
-        if limit > 100:
-            limit = 100
-            
         # API parametrelerini hazırla
         api_params = {
             'q': query,
@@ -263,7 +419,9 @@ def proxy_search():
         # Güvenli API çağrısı yap
         api_response = make_api_request('/api/search', params=api_params)
         
-        # Response'u frontend'e gönder
+        # Log the search
+        logging.info(f"Arama yapıldı: '{query}' - Kullanıcı: {session.get('user_name')}")
+        
         return jsonify(api_response)
         
     except Exception as e:
@@ -278,16 +436,15 @@ def proxy_search():
 def proxy_accounts():
     """Güvenli hesap listesi proxy"""
     try:
-        # Parametreleri al
         page = request.args.get('page', 1, type=int)
-        limit = request.args.get('limit', 10, type=int)
+        limit = min(request.args.get('limit', 10, type=int), 100)
         domain = request.args.get('domain', '')
         region = request.args.get('region', '')
         source = request.args.get('source', '')
         
         api_params = {
             'page': page,
-            'limit': min(limit, 100)  # Maksimum 100
+            'limit': limit
         }
         
         if domain:
@@ -352,151 +509,12 @@ def proxy_health():
             'error': str(e)
         }), 500
 
-# DASHBOARD ROUTES (Login Gerekli)
-@app.route('/')
-@login_required
-def dashboard():
-    """Ana dashboard sayfası - sadece gerçek veriyle"""
-    connection = None
-    chart_data = []
-    summary_data = {'labels': [], 'counts': [], 'percentages': [], 'colors': []}
-    error = ""
-    stats = {
-        'total_accounts': 0,
-        'unique_domains': 0,
-        'categories': [],
-        'last_updated': 'Bilinmiyor'
-    }
 
-    try:
-        connection = get_db_connection()
-        if connection:
-            cursor = connection.cursor(dictionary=True)
-            
-            # Kategori bazında veri çek
-            cursor.execute("SELECT category, COUNT(*) as count FROM fetched_accounts GROUP BY category ORDER BY count DESC")
-            categories = cursor.fetchall()
-            
-            if categories:
-                total_count = sum(category['count'] for category in categories)
-                
-                # Kategori sıralaması ile veri hazırla
-                chart_data = []
-                category_dict = {cat['category']: cat['count'] for cat in categories}
-                
-                # Önce tanımlı sıralamadaki kategorileri ekle
-                for cat_key in CATEGORY_ORDER:
-                    if cat_key in category_dict:
-                        count = category_dict[cat_key]
-                        percentage = round((count / total_count) * 100, 1)
-                        
-                        chart_data.append({
-                            'category': cat_key,
-                            'label': CATEGORY_TRANSLATIONS.get(cat_key, cat_key.title()),
-                            'count': count,
-                            'percentage': percentage,
-                            'color': CATEGORY_COLORS.get(cat_key, '#6B7280'),
-                            'icon': CATEGORY_ICONS.get(cat_key, 'folder')
-                        })
-                
-                # Sonra tanımlanmamış kategorileri ekle (varsa)
-                for category in categories:
-                    cat_key = category['category']
-                    if cat_key not in CATEGORY_ORDER:
-                        percentage = round((category['count'] / total_count) * 100, 1)
-                        chart_data.append({
-                            'category': cat_key,
-                            'label': CATEGORY_TRANSLATIONS.get(cat_key, cat_key.title()),
-                            'count': category['count'],
-                            'percentage': percentage,
-                            'color': CATEGORY_COLORS.get(cat_key, '#6B7280'),
-                            'icon': CATEGORY_ICONS.get(cat_key, 'folder')
-                        })
-                
-                summary_data = {
-                    'labels': [item['label'] for item in chart_data],
-                    'counts': [item['count'] for item in chart_data],
-                    'percentages': [item['percentage'] for item in chart_data],
-                    'colors': [item['color'] for item in chart_data]
-                }
-                
-                # Ek istatistikler
-                cursor.execute("SELECT COUNT(*) as total FROM fetched_accounts")
-                stats['total_accounts'] = cursor.fetchone()['total']
-                
-                cursor.execute("SELECT COUNT(DISTINCT domain) as unique_domains FROM fetched_accounts")
-                stats['unique_domains'] = cursor.fetchone()['unique_domains']
-                
-                # En son güncelleme tarihi
-                cursor.execute("SELECT MAX(fetch_date) as last_update FROM fetched_accounts")
-                last_update_result = cursor.fetchone()
-                stats['last_updated'] = str(last_update_result['last_update']) if last_update_result['last_update'] else 'Bilinmiyor'
-                
-                stats['categories'] = chart_data
-                
-                logging.info(f"Gerçek veritabanından {len(categories)} kategori alındı. Toplam: {total_count}")
-                
-            else:
-                error = "fetched_accounts tablosunda veri bulunamadı! Veri ekleme scriptini çalıştırın."
-                logging.warning("fetched_accounts tablosunda veri bulunamadı")
-                
-            cursor.close()
-            connection.close()
-            
-        else:
-            error = "Veritabanına bağlanılamadı! Bağlantı ayarlarını kontrol edin."
-            logging.error("Veritabanına bağlanılamadı")
-            
-    except Error as e:
-        error = f"Veri çekme hatası: {str(e)}"
-        logging.error(f"Veri çekme hatası: {e}")
-        if connection:
-            connection.close()
-
-    # Template'e gönderilen tüm değişkenler - INDEX.HTML kullanıyoruz
-    return render_template('index.html', 
-                         chart_data=chart_data, 
-                         summary_data=summary_data, 
-                         stats=stats,
-                         error=error,
-                         user_name=session.get('user_name'),
-                         user_role=session.get('user_role'))
-
-@app.route('/index')
-@login_required  
-def index():
-    return redirect(url_for('dashboard'))
-
-
-# Veritabanı bağlantı test endpoint'i
-@app.route('/test-db')
-@login_required
-def test_db():
-    connection = get_db_connection()
-    if connection:
-        try:
-            cursor = connection.cursor()
-            # fetched_accounts tablosu kontrolü
-            cursor.execute("SHOW TABLES LIKE 'fetched_accounts'")
-            result = cursor.fetchone()
-            if result:
-                cursor.execute("SELECT COUNT(*) FROM fetched_accounts")
-                count = cursor.fetchone()[0]
-                connection.close()
-                return f"✅ Veritabanı bağlantısı başarılı! fetched_accounts tablosunda {count} kayıt bulundu."
-            else:
-                connection.close()
-                return "⚠️ Veritabanı bağlantısı başarılı ancak fetched_accounts tablosu bulunamadı!"
-        except Error as e:
-            connection.close()
-            return f"❌ Tablo kontrolü hatası: {e}"
-    return "❌ Veritabanı bağlantısı başarısız! Logları kontrol edin."
-
-# API endpoint - gerçek zamanlı veri
+# Local API Endpoints - Veritabanından direkt veri
 @app.route('/api/stats')
 @login_required
 def api_stats():
-    """API endpoint - gerçek zamanlı istatistikler"""
+    """Gerçek zamanlı istatistikler"""
     connection = None
     try:
         connection = get_db_connection()
@@ -504,13 +522,18 @@ def api_stats():
             cursor = connection.cursor(dictionary=True)
             
             # Kategori bazında sayım
-            cursor.execute("SELECT category, COUNT(*) as count FROM fetched_accounts GROUP BY category ORDER BY count DESC")
+            cursor.execute("""
+                SELECT category, COUNT(*) as count 
+                FROM fetched_accounts 
+                GROUP BY category 
+                ORDER BY count DESC
+            """)
             categories = cursor.fetchall()
             
             if categories:
                 total_count = sum(category['count'] for category in categories)
                 
-                # API formatında veri hazırla - kategori sıralaması ile
+                # API formatında veri hazırla
                 stats_data = []
                 category_dict = {cat['category']: cat['count'] for cat in categories}
                 
@@ -527,7 +550,7 @@ def api_stats():
                             'icon': CATEGORY_ICONS.get(cat_key, 'folder')
                         })
                 
-                # Sonra tanımlanmamış kategorileri ekle (varsa)
+                # Sonra tanımlanmamış kategorileri ekle
                 for category in categories:
                     cat_key = category['category']
                     if cat_key not in CATEGORY_ORDER:
@@ -565,7 +588,6 @@ def api_stats():
                 connection.close()
                 return jsonify(response_data)
             else:
-                # Veritabanında veri yok
                 cursor.close()
                 connection.close()
                 return jsonify({
@@ -577,7 +599,6 @@ def api_stats():
                 })
                 
         else:
-            # Bağlantı başarısız
             return jsonify({
                 'success': False,
                 'error': 'Veritabanına bağlanılamadı',
@@ -598,11 +619,131 @@ def api_stats():
             'categories': []
         })
 
-# Kategori detay endpoint'i
+@app.route('/api/search')
+@login_required
+def api_search():
+    """Veritabanından arama"""
+    connection = None
+    try:
+        # Parametreleri al
+        query = request.args.get('q', '').strip()
+        page = request.args.get('page', 1, type=int)
+        limit = min(request.args.get('limit', 20, type=int), 100)
+        domain_filter = request.args.get('domain', '')
+        region_filter = request.args.get('region', '')
+        source_filter = request.args.get('source', '')
+        
+        if not query or len(query) < 2:
+            return jsonify({
+                'success': False,
+                'error': 'Arama sorgusu en az 2 karakter olmalıdır'
+            }), 400
+        
+        connection = get_db_connection()
+        if not connection:
+            return jsonify({
+                'success': False,
+                'error': 'Veritabanına bağlanılamadı'
+            }), 500
+        
+        cursor = connection.cursor(dictionary=True)
+        
+        # WHERE koşullarını oluştur
+        where_conditions = []
+        params = []
+        
+        # Arama koşulu
+        where_conditions.append("(domain LIKE %s OR username LIKE %s OR password LIKE %s)")
+        search_pattern = f"%{query}%"
+        params.extend([search_pattern, search_pattern, search_pattern])
+        
+        # Filtreler
+        if domain_filter:
+            where_conditions.append("domain LIKE %s")
+            params.append(f"%{domain_filter}%")
+        
+        if region_filter:
+            where_conditions.append("region = %s")
+            params.append(region_filter)
+        
+        if source_filter:
+            where_conditions.append("source = %s")
+            params.append(source_filter)
+        
+        where_clause = "WHERE " + " AND ".join(where_conditions)
+        
+        # Toplam sayı
+        count_query = f"SELECT COUNT(*) as total FROM fetched_accounts {where_clause}"
+        cursor.execute(count_query, params)
+        total_count = cursor.fetchone()['total']
+        
+        # Sayfalama hesaplama
+        total_pages = (total_count + limit - 1) // limit
+        offset = (page - 1) * limit
+        
+        # Ana sorgu
+        search_query = f"""
+            SELECT id, domain, username, password, region, source, fetch_date, category
+            FROM fetched_accounts 
+            {where_clause}
+            ORDER BY fetch_date DESC
+            LIMIT %s OFFSET %s
+        """
+        params.extend([limit, offset])
+        
+        cursor.execute(search_query, params)
+        results = cursor.fetchall()
+        
+        # Sonuçları formatla
+        formatted_results = []
+        for result in results:
+            formatted_results.append({
+                'id': result['id'],
+                'domain': result['domain'],
+                'username': result['username'],
+                'password': result['password'],
+                'region': result['region'] or 'Unknown',
+                'source': result['source'] or 'TXT',
+                'date': result['fetch_date'].isoformat() if result['fetch_date'] else None,
+                'category': result['category'] or 'uncategorized',
+                'spid': f"SP{1000 + result['id']}" if result['id'] % 3 == 0 else None
+            })
+        
+        cursor.close()
+        connection.close()
+        
+        response_data = {
+            'success': True,
+            'results': formatted_results,
+            'pagination': {
+                'page': page,
+                'pages': total_pages,
+                'total': total_count,
+                'has_next': page < total_pages,
+                'has_prev': page > 1
+            },
+            'summary': {
+                'exact_matches': len([r for r in formatted_results if query.lower() in r['domain'].lower()]),
+                'partial_matches': len(formatted_results)
+            }
+        }
+        
+        logging.info(f"Arama tamamlandı: '{query}' - {len(formatted_results)} sonuç")
+        return jsonify(response_data)
+        
+    except Exception as e:
+        logging.error(f"Arama hatası: {str(e)}")
+        if connection:
+            connection.close()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/api/category/<category_name>')
 @login_required
 def category_detail(category_name):
-    """Belirli bir kategorinin detaylarını getir"""
+    """Kategori detayları"""
     connection = None
     try:
         connection = get_db_connection()
@@ -631,7 +772,7 @@ def category_detail(category_name):
                 'category': category_name,
                 'label': CATEGORY_TRANSLATIONS.get(category_name, category_name.title()),
                 'total_count': total,
-                'accounts': accounts[:50],  # İlk 50 tanesini göster
+                'accounts': accounts[:50],
                 'showing': min(50, len(accounts)),
                 'user': session.get('user_name', 'Kullanıcı')
             })
@@ -646,10 +787,10 @@ def category_detail(category_name):
         'error': 'Kategori detayları alınamadı'
     })
 
-# User info endpoint
 @app.route('/api/user')
 @login_required
 def user_info():
+    """Kullanıcı bilgileri"""
     return jsonify({
         'success': True,
         'user_id': session.get('user_id'),
@@ -658,7 +799,6 @@ def user_info():
         'login_time': session.get('login_time')
     })
 
-# API Configuration endpoint - Frontend için
 @app.route('/api/config')
 @login_required
 def api_config():
@@ -666,23 +806,97 @@ def api_config():
     return jsonify({
         'success': True,
         'endpoints': {
-            'search': '/api/proxy/search',
+            'search': '/api/search',  # Local search kullan
             'accounts': '/api/proxy/accounts',
-            'statistics': '/api/proxy/statistics',
+            'statistics': '/api/stats',  # Local stats kullan
             'health': '/api/proxy/health'
         },
         'user': session.get('user_name', 'Kullanıcı')
     })
 
-# Admin panel (opsiyonel)
+
+# Utility Routes
+@app.route('/test-db')
+@login_required
+def test_db():
+    """Veritabanı bağlantı testi"""
+    connection = get_db_connection()
+    if connection:
+        try:
+            cursor = connection.cursor()
+            
+            # Tablo kontrolü
+            cursor.execute("SHOW TABLES LIKE 'fetched_accounts'")
+            result = cursor.fetchone()
+            
+            if result:
+                cursor.execute("SELECT COUNT(*) FROM fetched_accounts")
+                count = cursor.fetchone()[0]
+                
+                # Örnek veri kontrolü
+                cursor.execute("SELECT * FROM fetched_accounts LIMIT 1")
+                sample = cursor.fetchone()
+                
+                connection.close()
+                
+                return jsonify({
+                    'success': True,
+                    'message': f'Veritabanı bağlantısı başarılı! {count:,} kayıt bulundu.',
+                    'table_exists': True,
+                    'record_count': count,
+                    'has_sample_data': sample is not None
+                })
+            else:
+                connection.close()
+                return jsonify({
+                    'success': False,
+                    'message': 'fetched_accounts tablosu bulunamadı!',
+                    'table_exists': False
+                })
+                
+        except Error as e:
+            connection.close()
+            return jsonify({
+                'success': False,
+                'message': f'Tablo kontrolü hatası: {e}'
+            })
+    
+    return jsonify({
+        'success': False,
+        'message': 'Veritabanı bağlantısı başarısız!'
+    })
+
+@app.route('/health')
+def health_check():
+    """Sistem sağlık kontrolü"""
+    try:
+        db_status = test_db_connection()
+        
+        return jsonify({
+            'status': 'healthy',
+            'timestamp': datetime.now().isoformat(),
+            'database': 'connected' if db_status else 'disconnected',
+            'session_active': 'user_id' in session,
+            'version': '1.0.0'
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e)
+        }), 500
+
+
+# Admin Routes
 @app.route('/admin')
 @admin_required
 def admin_panel():
+    """Admin panel"""
     return render_template('admin.html', 
                          user_name=session.get('user_name'),
                          user_role=session.get('user_role'))
 
-# Error handlers
+
+# Error Handlers
 @app.errorhandler(404)
 def not_found(error):
     if 'user_id' in session:
@@ -691,7 +905,54 @@ def not_found(error):
 
 @app.errorhandler(500)
 def internal_error(error):
+    logging.error(f"Internal server error: {error}")
     return render_template('500.html'), 500
 
+@app.errorhandler(403)
+def forbidden(error):
+    flash('Bu işlem için yetkiniz yok.', 'error')
+    return redirect(url_for('dashboard'))
+
+
+# Context Processors
+@app.context_processor
+def inject_user():
+    """Template'lere kullanıcı bilgilerini enjekte et"""
+    return dict(
+        current_user=session.get('user_name', 'Misafir'),
+        user_role=session.get('user_role', 'guest'),
+        is_logged_in='user_id' in session
+    )
+
+
+# Development/Debug Routes
+@app.route('/debug/session')
+@login_required
+def debug_session():
+    """Session debug bilgileri"""
+    if not app.debug:
+        return jsonify({'error': 'Debug mode disabled'}), 403
+    
+    return jsonify({
+        'session_data': dict(session),
+        'session_permanent': session.permanent,
+        'session_new': session.new
+    })
+
+
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Başlangıç kontrolü
+    logging.info("Lapsus uygulaması başlatılıyor...")
+    
+    # Veritabanı bağlantı testi
+    if test_db_connection():
+        logging.info("✅ Veritabanı bağlantısı başarılı")
+    else:
+        logging.warning("⚠️ Veritabanı bağlantısı başarısız - bazı özellikler çalışmayabilir")
+    
+    # Uygulamayı başlat
+    app.run(
+        debug=os.getenv('FLASK_DEBUG', 'False').lower() == 'true',
+        host=os.getenv('FLASK_HOST', '0.0.0.0'),
+        port=int(os.getenv('FLASK_PORT', 7071))
+    )
