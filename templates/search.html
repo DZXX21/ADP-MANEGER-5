@@ -600,6 +600,10 @@
             background: linear-gradient(135deg, rgba(239, 68, 68, 0.9), rgba(185, 28, 28, 0.9));
         }
 
+        .toast-warning {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.9), rgba(217, 119, 6, 0.9));
+        }
+
         @keyframes fadeIn {
             from {
                 opacity: 0;
@@ -710,7 +714,7 @@
             <div class="user-menu">
                 <div class="user-info">
                     <i data-lucide="user"></i>
-                    <span class="user-name" id="currentUserName">Kullanıcı</span>
+                    <span class="user-name" id="currentUserName">{{ user_name or "Kullanıcı" }}</span>
                     <i data-lucide="chevron-down" class="user-chevron"></i>
                 </div>
                 <div class="user-dropdown">
@@ -846,12 +850,12 @@
         let currentQuery = '';
         let searchTimeout;
 
-        // Demo API endpoints - production'da backend'den gelir
+        // GERÇEK API endpoints - Backend'ten gelir
         const API_ENDPOINTS = {
-            search: '/api/search',
-            accounts: '/api/accounts',
-            statistics: '/api/statistics',
-            health: '/api/health'
+            search: '/api/search',        // Backend'teki gerçek arama endpoint'i
+            accounts: '/api/proxy/accounts',
+            statistics: '/api/stats',     // Local stats endpoint'i
+            health: '/api/proxy/health'
         };
 
         // DOM Elements
@@ -865,48 +869,7 @@
         const errorMessage = document.getElementById('errorMessage');
         const pagination = document.getElementById('pagination');
 
-        // Demo data for testing
-        const generateDemoResults = (query, page = 1, limit = 20) => {
-            const domains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'gov.tr', 'edu.tr', 'bank.com'];
-            const regions = ['TR', 'US', 'EU', 'AS'];
-            const sources = ['TXT', 'API', 'MANUAL', 'BULK'];
-            
-            const results = [];
-            const total = 145; // Demo total
-            const startIndex = (page - 1) * limit;
-            
-            for (let i = 0; i < limit && (startIndex + i) < total; i++) {
-                const index = startIndex + i;
-                results.push({
-                    id: index + 1,
-                    domain: domains[index % domains.length],
-                    username: `user${index + 1}`,
-                    password: `pass${Math.random().toString(36).substring(2, 10)}`,
-                    region: regions[index % regions.length],
-                    source: sources[index % sources.length],
-                    date: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
-                    spid: index % 3 === 0 ? `SP${1000 + index}` : null
-                });
-            }
-            
-            return {
-                success: true,
-                results: results,
-                pagination: {
-                    page: page,
-                    pages: Math.ceil(total / limit),
-                    total: total,
-                    has_next: page < Math.ceil(total / limit),
-                    has_prev: page > 1
-                },
-                summary: {
-                    exact_matches: Math.floor(results.length * 0.7),
-                    partial_matches: Math.floor(results.length * 0.3)
-                }
-            };
-        };
-
-        // Search function
+        // GERÇEK API'yi kullan - Demo fallback ile
         async function performSearch(query, page = 1, filters = {}) {
             if (!query || query.length < 2) {
                 showError('Arama sorgusu en az 2 karakter olmalıdır');
@@ -919,27 +882,190 @@
             try {
                 const startTime = performance.now();
                 
-                // Demo - gerçek API çağrısı yerine demo data kullan
-                await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000)); // Simulate network delay
-                const data = generateDemoResults(query, page, filters.limit || 20);
+                // API parametrelerini hazırla
+                const params = new URLSearchParams({
+                    q: query,
+                    page: page,
+                    limit: filters.limit || 20
+                });
                 
+                // Filtreleri ekle
+                if (filters.domain) params.append('domain', filters.domain);
+                if (filters.region) params.append('region', filters.region);
+                if (filters.source) params.append('source', filters.source);
+                
+                console.log('🔍 API çağrısı yapılıyor:', `${API_ENDPOINTS.search}?${params.toString()}`);
+                
+                // GERÇEK API ÇAĞRISI
+                const response = await fetch(`${API_ENDPOINTS.search}?${params.toString()}`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
                 const endTime = performance.now();
                 const responseTime = Math.round(endTime - startTime);
+                
+                console.log('✅ API yanıtı:', data);
                 
                 if (data.success) {
                     displayResults(data, query, responseTime);
                     updatePagination(data.pagination);
                 } else {
-                    throw new Error(data.message || 'Arama başarısız');
+                    throw new Error(data.error || 'Arama başarısız');
                 }
 
             } catch (error) {
-                console.error('Search error:', error);
+                console.error('❌ API hatası:', error);
                 showError(`Arama hatası: ${error.message}`);
+                
+                // Eğer API erişilemiyorsa fallback olarak demo data kullan
+                if (error.message.includes('fetch') || error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
+                    console.warn('⚠️ API erişilemediği için demo data kullanılıyor');
+                    try {
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                        const demoData = generateDemoResults(query, page, filters);
+                        const endTime = performance.now();
+                        const responseTime = Math.round(endTime - startTime);
+                        displayResults(demoData, query, responseTime);
+                        updatePagination(demoData.pagination);
+                        showToast('Demo veriler gösteriliyor - API bağlantısı kurulamadı', 'warning');
+                    } catch (demoError) {
+                        console.error('❌ Demo data hatası:', demoError);
+                        showError('Hem API hem de demo veriler başarısız');
+                    }
+                }
             } finally {
                 showLoading(false);
             }
         }
+
+        // Demo data generator - SADECE API başarısız olursa kullanılır
+        const generateDemoResults = (query, page = 1, filters = {}) => {
+            const limit = parseInt(filters.limit) || 20;
+            
+            // Tüm demo verilerini oluştur
+            const allDemoData = [];
+            const baseData = [
+                { domain: 'gmail.com', category: 'email', region: 'US' },
+                { domain: 'yahoo.com', category: 'email', region: 'US' },
+                { domain: 'hotmail.com', category: 'email', region: 'US' },
+                { domain: 'outlook.com', category: 'email', region: 'US' },
+                { domain: 'gov.tr', category: 'government', region: 'TR' },
+                { domain: 'edu.tr', category: 'university', region: 'TR' },
+                { domain: 'meb.gov.tr', category: 'government', region: 'TR' },
+                { domain: 'toki.gov.tr', category: 'government', region: 'TR' },
+                { domain: 'ankara.edu.tr', category: 'university', region: 'TR' },
+                { domain: 'istanbul.edu.tr', category: 'university', region: 'TR' },
+                { domain: 'vakifbank.com.tr', category: 'bank', region: 'TR' },
+                { domain: 'garanti.com.tr', category: 'bank', region: 'TR' },
+                { domain: 'isbank.com.tr', category: 'bank', region: 'TR' },
+                { domain: 'facebook.com', category: 'social', region: 'US' },
+                { domain: 'twitter.com', category: 'social', region: 'US' },
+                { domain: 'instagram.com', category: 'social', region: 'US' },
+                { domain: 'linkedin.com', category: 'social', region: 'US' },
+                { domain: 'yandex.ru', category: 'email', region: 'RU' },
+                { domain: 'mail.ru', category: 'email', region: 'RU' }
+            ];
+            
+            // Her domain için birden fazla hesap oluştur
+            baseData.forEach((base, baseIndex) => {
+                const accountCount = Math.floor(Math.random() * 8) + 3; // 3-10 hesap arası
+                for (let i = 0; i < accountCount; i++) {
+                    allDemoData.push({
+                        id: allDemoData.length + 1,
+                        domain: base.domain,
+                        username: `user${baseIndex}_${i + 1}`,
+                        password: `pass${Math.random().toString(36).substring(2, 10)}`,
+                        region: base.region,
+                        source: ['TXT', 'API', 'MANUAL', 'BULK'][Math.floor(Math.random() * 4)],
+                        category: base.category,
+                        date: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toISOString(),
+                        spid: (allDemoData.length + 1) % 3 === 0 ? `SP${1000 + allDemoData.length + 1}` : null
+                    });
+                }
+            });
+            
+            // ARAMA FİLTRELEMESİ
+            let filteredResults = allDemoData.filter(item => {
+                const queryLower = query.toLowerCase();
+                
+                // Ana arama kriteri - domain, username veya password'de arama
+                const matchesQuery = 
+                    item.domain.toLowerCase().includes(queryLower) ||
+                    item.username.toLowerCase().includes(queryLower) ||
+                    item.password.toLowerCase().includes(queryLower);
+                
+                if (!matchesQuery) return false;
+                
+                // Domain filtresi
+                if (filters.domain) {
+                    const domainFilter = filters.domain.toLowerCase();
+                    if (!item.domain.toLowerCase().includes(domainFilter)) return false;
+                }
+                
+                // Region filtresi
+                if (filters.region && item.region !== filters.region) {
+                    return false;
+                }
+                
+                // Source filtresi
+                if (filters.source && item.source !== filters.source) {
+                    return false;
+                }
+                
+                return true;
+            });
+            
+            // Relevans skoruna göre sırala
+            filteredResults.sort((a, b) => {
+                const queryLower = query.toLowerCase();
+                
+                // Exact domain match en üstte
+                const aExactDomain = a.domain.toLowerCase() === queryLower;
+                const bExactDomain = b.domain.toLowerCase() === queryLower;
+                if (aExactDomain && !bExactDomain) return -1;
+                if (!aExactDomain && bExactDomain) return 1;
+                
+                // Domain başlangıcında match
+                const aDomainStart = a.domain.toLowerCase().startsWith(queryLower);
+                const bDomainStart = b.domain.toLowerCase().startsWith(queryLower);
+                if (aDomainStart && !bDomainStart) return -1;
+                if (!aDomainStart && bDomainStart) return 1;
+                
+                // Alfabetik sıralama
+                return a.domain.localeCompare(b.domain);
+            });
+            
+            const total = filteredResults.length;
+            const totalPages = Math.ceil(total / limit);
+            const startIndex = (page - 1) * limit;
+            const endIndex = startIndex + limit;
+            const pageResults = filteredResults.slice(startIndex, endIndex);
+            
+            return {
+                success: true,
+                results: pageResults,
+                pagination: {
+                    page: page,
+                    pages: totalPages,
+                    total: total,
+                    has_next: page < totalPages,
+                    has_prev: page > 1
+                },
+                summary: {
+                    exact_matches: Math.floor(pageResults.length * 0.7),
+                    partial_matches: Math.floor(pageResults.length * 0.3)
+                }
+            };
+        };
 
         // Display search results
         function displayResults(data, query, responseTime) {
@@ -970,6 +1096,7 @@
                             <span class="tag">${result.region || 'Unknown'}</span>
                             <span class="tag">${result.source || 'TXT'}</span>
                             ${result.spid ? `<span class="tag">SPID: ${result.spid}</span>` : ''}
+                            ${result.category ? `<span class="tag">${result.category}</span>` : ''}
                         </div>
                     </div>
                     <div class="result-details">
@@ -1138,7 +1265,7 @@
             toast.className = `toast toast-${type}`;
             
             toast.innerHTML = `
-                <i data-lucide="${type === 'success' ? 'check-circle' : 'alert-circle'}"></i>
+                <i data-lucide="${type === 'success' ? 'check-circle' : type === 'warning' ? 'alert-triangle' : 'alert-circle'}"></i>
                 ${message}
             `;
             
@@ -1256,9 +1383,6 @@
         document.addEventListener('DOMContentLoaded', () => {
             searchInput.focus();
             
-            // Load user info from template or session
-            loadUserInfo();
-            
             // Check for URL parameters
             const urlParams = new URLSearchParams(window.location.search);
             const urlQuery = urlParams.get('q');
@@ -1272,35 +1396,6 @@
             addQuickSearchButtons();
             initializeUserMenu();
         });
-
-        // Load user info from backend or template
-        function loadUserInfo() {
-            // Index sayfasındaki gibi template variable'ı kullan
-            const templateUserName = '{{ user_name or "Kullanıcı" }}';
-            
-            // Template variable varsa kullan
-            if (templateUserName && templateUserName !== '{{ user_name or "Kullanıcı" }}') {
-                document.getElementById('currentUserName').textContent = templateUserName;
-                console.log('✅ Template\'ten kullanıcı bilgisi yüklendi:', templateUserName);
-                return;
-            }
-            
-            // Template yoksa API'den dene
-            fetch('/api/user')
-                .then(response => response.json())
-                .then(userData => {
-                    if (userData.success && userData.user_name) {
-                        document.getElementById('currentUserName').textContent = userData.user_name;
-                        console.log('✅ API\'den kullanıcı bilgisi yüklendi:', userData.user_name);
-                    } else {
-                        console.warn('⚠️ Kullanıcı bilgisi bulunamadı');
-                    }
-                })
-                .catch(error => {
-                    console.error('❌ Kullanıcı bilgisi yüklenirken hata:', error);
-                    // Varsayılan değer kalsın: "Kullanıcı"
-                });
-        }
 
         // User menu functionality
         function initializeUserMenu() {

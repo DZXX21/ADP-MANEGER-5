@@ -619,11 +619,11 @@ def api_stats():
             'categories': []
         })
 
+# ✅ ARAMA FONKSİYONU - API'DEN VERİ ÇEK
 @app.route('/api/search')
 @login_required
 def api_search():
-    """Veritabanından arama"""
-    connection = None
+    """API'den arama - Veritabanı yerine API kullan"""
     try:
         # Parametreleri al
         query = request.args.get('q', '').strip()
@@ -639,34 +639,118 @@ def api_search():
                 'error': 'Arama sorgusu en az 2 karakter olmalıdır'
             }), 400
         
+        # API parametrelerini hazırla
+        api_params = {
+            'q': query,
+            'page': page,
+            'limit': limit
+        }
+        
+        # Filtreleri ekle
+        if domain_filter:
+            api_params['domain'] = domain_filter
+        if region_filter:
+            api_params['region'] = region_filter
+        if source_filter:
+            api_params['source'] = source_filter
+        
+        logging.info(f"API'den arama başlatılıyor: '{query}' - Parametreler: {api_params}")
+        
+        # API'den veri çek
+        try:
+            api_response = make_api_request('/api/search', params=api_params)
+            
+            # API yanıtını logla
+            logging.info(f"API arama başarılı: '{query}' - {len(api_response.get('results', []))} sonuç")
+            
+            # Eğer API yanıtında debug bilgisi yoksa ekle
+            if 'debug' not in api_response:
+                api_response['debug'] = {
+                    'data_source': 'external_api',
+                    'api_endpoint': f"{API_CONFIG['base_url']}/api/search",
+                    'query': query,
+                    'params': api_params
+                }
+            
+            return jsonify(api_response)
+            
+        except Exception as api_error:
+            logging.warning(f"API arama başarısız, fallback'e geçiliyor: {str(api_error)}")
+            
+            # API başarısız olursa fallback olarak veritabanından ara
+            return fallback_database_search(query, page, limit, domain_filter, region_filter, source_filter)
+        
+    except Exception as e:
+        logging.error(f"Arama hatası: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'data_source': 'error'
+        }), 500
+
+# ✅ FALLBACK VERİTABANI ARAMA FONKSİYONU
+def fallback_database_search(query, page=1, limit=20, domain_filter='', region_filter='', source_filter=''):
+    """API başarısız olduğunda veritabanından arama yap"""
+    connection = None
+    try:
+        logging.info(f"Fallback veritabanı araması başlatılıyor: '{query}'")
+        
         connection = get_db_connection()
         if not connection:
             return jsonify({
                 'success': False,
-                'error': 'Veritabanına bağlanılamadı'
+                'error': 'API ve veritabanı bağlantısı başarısız',
+                'data_source': 'fallback_failed'
             }), 500
         
         cursor = connection.cursor(dictionary=True)
         
-        # WHERE koşullarını oluştur
+        # Tablo yapısını öğren
+        cursor.execute("DESCRIBE fetched_accounts")
+        table_columns = cursor.fetchall()
+        available_columns = [col['Field'] for col in table_columns]
+        
+        # Arama kolonlarını belirle
+        search_columns = []
+        if 'domain' in available_columns:
+            search_columns.append('domain')
+        
+        username_columns = ['username', 'user', 'email', 'login', 'user_name', 'account']
+        for col in username_columns:
+            if col in available_columns and col not in search_columns:
+                search_columns.append(col)
+                break
+        
+        password_columns = ['password', 'pass', 'pwd', 'passwd', 'secret']
+        for col in password_columns:
+            if col in available_columns and col not in search_columns:
+                search_columns.append(col)
+                break
+        
+        # WHERE koşulları
         where_conditions = []
         params = []
         
         # Arama koşulu
-        where_conditions.append("(domain LIKE %s OR username LIKE %s OR password LIKE %s)")
-        search_pattern = f"%{query}%"
-        params.extend([search_pattern, search_pattern, search_pattern])
+        if search_columns:
+            search_parts = []
+            search_pattern = f"%{query}%"
+            for col in search_columns:
+                search_parts.append(f"{col} LIKE %s")
+                params.append(search_pattern)
+            where_conditions.append(f"({' OR '.join(search_parts)})")
+        else:
+            where_conditions.append("domain LIKE %s")
+            params.append(f"%{query}%")
         
         # Filtreler
         if domain_filter:
             where_conditions.append("domain LIKE %s")
             params.append(f"%{domain_filter}%")
-        
-        if region_filter:
+        if region_filter and 'region' in available_columns:
             where_conditions.append("region = %s")
             params.append(region_filter)
-        
-        if source_filter:
+        if source_filter and 'source' in available_columns:
             where_conditions.append("source = %s")
             params.append(source_filter)
         
@@ -677,16 +761,25 @@ def api_search():
         cursor.execute(count_query, params)
         total_count = cursor.fetchone()['total']
         
-        # Sayfalama hesaplama
+        # Sayfalama
         total_pages = (total_count + limit - 1) // limit
         offset = (page - 1) * limit
         
+        # Tarih kolonu
+        date_column = 'fetch_date'
+        if 'fetch_date' not in available_columns:
+            for alt_date in ['created_at', 'date_added', 'timestamp', 'date', 'created']:
+                if alt_date in available_columns:
+                    date_column = alt_date
+                    break
+            else:
+                date_column = available_columns[0]
+        
         # Ana sorgu
         search_query = f"""
-            SELECT id, domain, username, password, region, source, fetch_date, category
-            FROM fetched_accounts 
+            SELECT * FROM fetched_accounts 
             {where_clause}
-            ORDER BY fetch_date DESC
+            ORDER BY {date_column} DESC
             LIMIT %s OFFSET %s
         """
         params.extend([limit, offset])
@@ -697,17 +790,37 @@ def api_search():
         # Sonuçları formatla
         formatted_results = []
         for result in results:
-            formatted_results.append({
-                'id': result['id'],
-                'domain': result['domain'],
-                'username': result['username'],
-                'password': result['password'],
-                'region': result['region'] or 'Unknown',
-                'source': result['source'] or 'TXT',
-                'date': result['fetch_date'].isoformat() if result['fetch_date'] else None,
-                'category': result['category'] or 'uncategorized',
-                'spid': f"SP{1000 + result['id']}" if result['id'] % 3 == 0 else None
-            })
+            username_value = None
+            password_value = None
+            
+            for col in username_columns:
+                if col in result and result[col]:
+                    username_value = result[col]
+                    break
+            
+            for col in password_columns:
+                if col in result and result[col]:
+                    password_value = result[col]
+                    break
+            
+            formatted_result = {
+                'id': result.get('id', 0),
+                'domain': result.get('domain', ''),
+                'username': username_value or 'N/A',
+                'password': password_value or 'N/A',
+                'region': result.get('region', 'Unknown'),
+                'source': result.get('source', 'TXT'),
+                'category': result.get('category', 'uncategorized'),
+                'spid': f"SP{1000 + result.get('id', 0)}" if result.get('id', 0) % 3 == 0 else None
+            }
+            
+            date_value = result.get('fetch_date') or result.get('created_at') or result.get('date_added')
+            if date_value:
+                formatted_result['date'] = date_value.isoformat() if hasattr(date_value, 'isoformat') else str(date_value)
+            else:
+                formatted_result['date'] = None
+            
+            formatted_results.append(formatted_result)
         
         cursor.close()
         connection.close()
@@ -725,22 +838,42 @@ def api_search():
             'summary': {
                 'exact_matches': len([r for r in formatted_results if query.lower() in r['domain'].lower()]),
                 'partial_matches': len(formatted_results)
+            },
+            'debug': {
+                'data_source': 'fallback_database',
+                'search_columns': search_columns,
+                'available_columns': available_columns,
+                'query': query,
+                'warning': 'API başarısız oldu, veritabanından arama yapıldı'
             }
         }
         
-        logging.info(f"Arama tamamlandı: '{query}' - {len(formatted_results)} sonuç")
+        logging.info(f"Fallback arama tamamlandı: '{query}' - {len(formatted_results)} sonuç")
         return jsonify(response_data)
         
     except Exception as e:
-        logging.error(f"Arama hatası: {str(e)}")
+        logging.error(f"Fallback arama hatası: {str(e)}")
         if connection:
             connection.close()
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': str(e),
+            'data_source': 'fallback_error'
         }), 500
 
-@app.route('/api/category/<category_name>')
+# ✅ VERİTABANI ARAMA ENDPOINT'İ - SADECE DEBUG İÇİN
+@app.route('/api/search-db')
+@login_required
+def api_search_database():
+    """Doğrudan veritabanından arama - Sadece debug/test için"""
+    return fallback_database_search(
+        query=request.args.get('q', '').strip(),
+        page=request.args.get('page', 1, type=int),
+        limit=min(request.args.get('limit', 20, type=int), 100),
+        domain_filter=request.args.get('domain', ''),
+        region_filter=request.args.get('region', ''),
+        source_filter=request.args.get('source', '')
+    )
 @login_required
 def category_detail(category_name):
     """Kategori detayları"""
@@ -815,27 +948,89 @@ def api_config():
     })
 
 
+# ✅ GÜNCELLENMIŞ DEBUG ENDPOINT'LERİ
+@app.route('/debug/table-structure')
+@login_required
+def debug_table_structure():
+    """Tablo yapısını kontrol et"""
+    connection = None
+    try:
+        connection = get_db_connection()
+        if connection:
+            cursor = connection.cursor(dictionary=True)
+            
+            # Tablo yapısını al
+            cursor.execute("DESCRIBE fetched_accounts")
+            columns = cursor.fetchall()
+            
+            # Örnek veri al
+            cursor.execute("SELECT * FROM fetched_accounts LIMIT 1")
+            sample_data = cursor.fetchone()
+            
+            # Tablo sayısı
+            cursor.execute("SELECT COUNT(*) as total FROM fetched_accounts")
+            total_count = cursor.fetchone()['total']
+            
+            # Domain örnekleri
+            cursor.execute("SELECT DISTINCT domain FROM fetched_accounts LIMIT 10")
+            sample_domains = [row['domain'] for row in cursor.fetchall()]
+            
+            cursor.close()
+            connection.close()
+            
+            return jsonify({
+                'success': True,
+                'table_structure': columns,
+                'sample_data': sample_data,
+                'columns_list': [col['Field'] for col in columns],
+                'total_records': total_count,
+                'sample_domains': sample_domains,
+                'recommendations': {
+                    'username_columns': [col['Field'] for col in columns if any(keyword in col['Field'].lower() for keyword in ['user', 'email', 'login', 'account'])],
+                    'password_columns': [col['Field'] for col in columns if any(keyword in col['Field'].lower() for keyword in ['pass', 'pwd', 'secret'])],
+                    'date_columns': [col['Field'] for col in columns if any(keyword in col['Field'].lower() for keyword in ['date', 'time', 'created', 'added'])]
+                }
+            })
+    except Exception as e:
+        if connection:
+            connection.close()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+    return jsonify({'success': False, 'error': 'Veritabanı bağlantısı başarısız'})
+
 # Utility Routes
 @app.route('/test-db')
 @login_required
 def test_db():
-    """Veritabanı bağlantı testi"""
+    """Veritabanı bağlantı testi - Gelişmiş versiyon"""
     connection = get_db_connection()
     if connection:
         try:
-            cursor = connection.cursor()
+            cursor = connection.cursor(dictionary=True)
             
             # Tablo kontrolü
             cursor.execute("SHOW TABLES LIKE 'fetched_accounts'")
             result = cursor.fetchone()
             
             if result:
-                cursor.execute("SELECT COUNT(*) FROM fetched_accounts")
-                count = cursor.fetchone()[0]
+                # Tablo yapısı
+                cursor.execute("DESCRIBE fetched_accounts")
+                table_structure = cursor.fetchall()
                 
-                # Örnek veri kontrolü
+                # Kayıt sayısı
+                cursor.execute("SELECT COUNT(*) as count FROM fetched_accounts")
+                count = cursor.fetchone()['count']
+                
+                # Örnek veri
                 cursor.execute("SELECT * FROM fetched_accounts LIMIT 1")
                 sample = cursor.fetchone()
+                
+                # Domain örnekleri
+                cursor.execute("SELECT DISTINCT domain FROM fetched_accounts LIMIT 10")
+                sample_domains = [row['domain'] for row in cursor.fetchall()]
                 
                 connection.close()
                 
@@ -844,7 +1039,11 @@ def test_db():
                     'message': f'Veritabanı bağlantısı başarılı! {count:,} kayıt bulundu.',
                     'table_exists': True,
                     'record_count': count,
-                    'has_sample_data': sample is not None
+                    'has_sample_data': sample is not None,
+                    'table_structure': table_structure,
+                    'sample_data': sample,
+                    'sample_domains': sample_domains,
+                    'available_columns': [col['Field'] for col in table_structure]
                 })
             else:
                 connection.close()
@@ -854,7 +1053,7 @@ def test_db():
                     'table_exists': False
                 })
                 
-        except Error as e:
+        except Exception as e:
             connection.close()
             return jsonify({
                 'success': False,
